@@ -1,6 +1,7 @@
 # dataset settings
-dataset_type = 'CityscapesDataset'
-data_root = '/mnt/kidl-data/cityscapes'
+dataset_type = 'BDD100KDataset'
+data_root = 'data/bdd100k/'
+
 crop_size = (512, 1024)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -48,7 +49,8 @@ train_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         data_prefix=dict(
-            img_path='leftImg8bit/train', seg_map_path='gtFine/train'),
+            img_path='images/10k/train',
+            seg_map_path='labels/sem_seg/masks/train'),
         pipeline=train_pipeline))
 val_dataloader = dict(
     batch_size=1,
@@ -59,7 +61,8 @@ val_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         data_prefix=dict(
-            img_path='leftImg8bit/val', seg_map_path='gtFine/val'),
+            img_path='images/10k/val',
+            seg_map_path='labels/sem_seg/masks/val'),
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
 

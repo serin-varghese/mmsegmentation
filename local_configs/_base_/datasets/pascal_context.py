@@ -1,13 +1,16 @@
 # dataset settings
-dataset_type = 'CityscapesDataset'
-data_root = '/mnt/kidl-data/cityscapes'
-crop_size = (512, 1024)
+dataset_type = 'PascalContextDataset'
+data_root = 'data/VOCdevkit/VOC2010/'
+
+img_scale = (520, 520)
+crop_size = (480, 480)
+
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
     dict(
         type='RandomResize',
-        scale=(2048, 1024),
+        scale=img_scale,
         ratio_range=(0.5, 2.0),
         keep_ratio=True),
     dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75),
@@ -17,38 +20,23 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='Resize', scale=(2048, 1024), keep_ratio=True),
+    dict(type='Resize', scale=img_scale, keep_ratio=True),
     # add loading annotation after ``Resize`` because ground truth
     # does not need to do resize data transform
     dict(type='LoadAnnotations'),
     dict(type='PackSegInputs')
 ]
-img_ratios = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
-tta_pipeline = [
-    dict(type='LoadImageFromFile', backend_args=None),
-    dict(
-        type='TestTimeAug',
-        transforms=[
-            [
-                dict(type='Resize', scale_factor=r, keep_ratio=True)
-                for r in img_ratios
-            ],
-            [
-                dict(type='RandomFlip', prob=0., direction='horizontal'),
-                dict(type='RandomFlip', prob=1., direction='horizontal')
-            ], [dict(type='LoadAnnotations')], [dict(type='PackSegInputs')]
-        ])
-]
 train_dataloader = dict(
-    batch_size=2,
-    num_workers=2,
+    batch_size=4,
+    num_workers=4,
     persistent_workers=True,
     sampler=dict(type='InfiniteSampler', shuffle=True),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
         data_prefix=dict(
-            img_path='leftImg8bit/train', seg_map_path='gtFine/train'),
+            img_path='JPEGImages', seg_map_path='SegmentationClassContext'),
+        ann_file='ImageSets/SegmentationContext/train.txt',
         pipeline=train_pipeline))
 val_dataloader = dict(
     batch_size=1,
@@ -59,7 +47,8 @@ val_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         data_prefix=dict(
-            img_path='leftImg8bit/val', seg_map_path='gtFine/val'),
+            img_path='JPEGImages', seg_map_path='SegmentationClassContext'),
+        ann_file='ImageSets/SegmentationContext/val.txt',
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
