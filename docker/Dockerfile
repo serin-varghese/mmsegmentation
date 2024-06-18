@@ -3,7 +3,7 @@ ARG CUDA="11.3"
 ARG CUDNN="8"
 ARG MMCV="2.0.1"
 
-FROM pytorch/pytorch:${PYTORCH}-cuda${CUDA}-cudnn${CUDNN}-devel
+FROM docker-public.docker.devstack.vwgroup.com/pytorch/pytorch:1.11.0-cuda11.3-cudnn8-devel
 
 ENV TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX"
 ENV TORCH_NVCC_FLAGS="-Xfatbin -compress-all"

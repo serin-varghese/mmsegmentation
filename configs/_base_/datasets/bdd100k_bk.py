@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'BDD100KDataset'
-data_root = '/mnt/kidl-data/bdd100k/'
+data_root = 'data/bdd100k/'
 
 crop_size = (512, 1024)
 train_pipeline = [
@@ -48,10 +48,9 @@ train_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        seg_map_suffix = "_train_id.png", 
         data_prefix=dict(
-            img_path='images/train',
-            seg_map_path='labels/train'),
+            img_path='images/10k/train',
+            seg_map_path='labels/sem_seg/masks/train'),
         pipeline=train_pipeline))
 val_dataloader = dict(
     batch_size=1,
@@ -61,10 +60,9 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        seg_map_suffix = "_train_id.png", 
         data_prefix=dict(
-            img_path='images/val',
-            seg_map_path='labels/val'),
+            img_path='images/10k/val',
+            seg_map_path='labels/sem_seg/masks/val'),
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
