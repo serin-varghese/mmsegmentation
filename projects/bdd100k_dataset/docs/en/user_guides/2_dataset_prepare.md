@@ -1,8 +1,8 @@
 ## BDD100K
 
-- You could download BDD100k datasets from  [here](https://bdd-data.berkeley.edu/) after  registration.
+- You could download BDD100k datasets from  [here](https://dl.cv.ethz.ch/bdd100k/data/). [Note: There are issues with accessing the [official download page](https://bdd-data.berkeley.edu/)]. Use the [official github repo](https://github.com/bdd100k/bdd100k) for additional tools.
 
-- You can download images and masks by clicking  `10K Images` button and `Segmentation` button.
+- Download the 10k_images_train, 10k_images_test and 10k_images_val zips.
 
 - After download, unzip by the following instructions:
 

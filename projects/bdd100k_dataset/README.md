@@ -10,7 +10,7 @@ This project implements **`BDD100K Dataset`**
 
 ### Dataset preparing
 
-Preparing `BDD100K Dataset` dataset following [BDD100K Dataset Preparing Guide](https://github.com/open-mmlab/mmsegmentation/tree/main/projects/mapillary_dataset/docs/en/user_guides/2_dataset_prepare.md#bdd100k)
+Preparing `BDD100K Dataset` dataset following [BDD100K Dataset Preparing Guide](https://github.com/open-mmlab/mmsegmentation/tree/main/projects/bdd100k_dataset/docs/en/user_guides/2_dataset_prepare.md#bdd100k)
 
 ```none
 mmsegmentation/data
