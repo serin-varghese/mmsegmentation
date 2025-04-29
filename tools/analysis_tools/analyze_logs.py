@@ -121,6 +121,7 @@ def main():
     args = parse_args()
     json_logs = args.json_logs
     for json_log in json_logs:
+        print(json_log)
         assert json_log.endswith('.json')
     log_dicts = load_json_logs(json_logs)
     plot_curve(log_dicts, args)
