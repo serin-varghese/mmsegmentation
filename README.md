@@ -1,7 +1,7 @@
 STVFormer is a semantic segmentation framework built on top of OpenMMLab’s MMSegmentation. This repository extends MMSegmentation with a novel architecture—Spatial-Temporal Vision Transformer (STVFormer)—designed to enhance segmentation performance in video and sequential imagery by leveraging both spatial and temporal contextual cues.
 
 This repo inherits MMSegmentation’s modular design, training pipelines, and evaluation tools, and integrates additional components specific to STVFormer, including custom backbones, temporal fusion modules, and dataset loaders optimized for sequential data.
-
+d
 
 <div align="center">
   <img src="resources/mmseg-logo.png" width="600"/>
