@@ -26,6 +26,21 @@ Download the cityscapes dataset. Once you have logged in, your will have your us
 TODO
 
 
+
+## Training with STVFormer
+
+```bash
+python tools/train.py configs/stvformer/stvformer_cityscapes.py --work-dir work_dirs/stvformer_cityscapes
+```
+## Inference with STVFormer
+
+For inference, we either use weights and biases or the
+```bash
+python tools/STV_Inference.py
+```
+
+
+
 ## Contributing
 
 We try to build upon MMSegmentation. Please refer to [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contributing guideline.
