@@ -1,8 +1,8 @@
 repos:
-  - repo: https://github.com/PyCQA/flake8
-    rev: 5.0.4
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.4.2  # Use the latest stable version of Ruff
     hooks:
-      - id: flake8
+      - id: ruff
   - repo: https://github.com/zhouzaida/isort
     rev: 5.12.1
     hooks:
@@ -38,11 +38,11 @@ repos:
     hooks:
       - id: codespell
         args: [--ignore-words-list=hsi]
-  - repo: https://github.com/myint/docformatter
-    rev: v1.3.1
-    hooks:
-      - id: docformatter
-        args: ["--in-place", "--wrap-descriptions", "79"]
+  # - repo: https://github.com/myint/docformatter
+  #   rev: v1.3.1
+  #   hooks:
+  #     - id: docformatter
+  #       args: ["--in-place", "--wrap-descriptions", "79"]
   # temporarily remove update-model-index to avoid conflict raised
   # by depth estimator models
   # - repo: local
@@ -62,6 +62,6 @@ repos:
   - repo: https://github.com/open-mmlab/pre-commit-hooks
     rev: v0.2.0  # Use the rev to fix revision
     hooks:
-      - id: check-algo-readme
+      # - id: check-algo-readme # disabled because lots of components have been removed for STVFormer
       - id: check-copyright
         args: ["mmseg", "tools", "tests", "demo"]  # the dir_to_check with expected directory to check

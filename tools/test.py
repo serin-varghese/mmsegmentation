@@ -1,122 +1,230 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+"""
+===========================================================
+MMSegmentation Inference and Evaluation Script
+===========================================================
+
+This script loads a segmentation model using the MMSegmentation framework,
+performs testing (inference) on a dataset, and optionally:
+- Saves output predictions to a pickle file
+- Evaluates the model performance on specified metrics (e.g., mIoU, mTC)
+- Saves visualized output to a directory
+- Supports both single-GPU and distributed multi-GPU testing
+
+Usage:
+    python script.py CONFIG_PATH CHECKPOINT_PATH [--eval mIoU] [--show] ...
+
+Dependencies:
+    - mmcv
+    - mmengine
+    - mmsegmentation
+    - torch
+    - Supports plugins like Ipython for debugging, Starship shell configs, etc.
+
+===========================================================
+"""
+
 import argparse
 import os
-import os.path as osp
 
-from mmengine.config import Config, DictAction
-from mmengine.runner import Runner
+import mmcv
+import torch
+from mmengine.config import DictAction
+from mmengine.dist import get_dist_info, init_dist
+from mmengine.model import MMDistributedDataParallel
+
+from mmseg.apis import multi_gpu_test
+from mmseg.datasets import build_dataloader, build_dataset
+from mmseg.models import build_segmentor
+
+# from mmengine.runner import load_checkpoint
 
 
-# TODO: support fuse_conv_bn, visualization, and format_only
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='MMSeg test (and eval) a model')
-    parser.add_argument('config', help='train config file path')
+        description='mmseg test (and eval) a model')
+    parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument(
-        '--work-dir',
-        help=('if specified, the evaluation metric results will be dumped'
-              'into the directory as json'))
+        '--aug-test', action='store_true', help='Use Flip and Multi scale aug')
     parser.add_argument(
         '--out',
+        default='work_dirs/res.pkl',
+        help='output result file in pickle format')
+    parser.add_argument(
+        '--format-only',
+        action='store_true',
+        help='Format the output results without perform evaluation. It is'
+        'useful when you want to format the result to a specific format and '
+        'submit it to the test server',
+    )
+    parser.add_argument(
+        '--eval',
         type=str,
-        help='The directory to save output prediction for offline evaluation')
+        nargs='+',
+        default='mIoU',
+        help='evaluation metrics, which depends on the dataset, e.g., "mIoU"'
+        ' for generic datasets, and "cityscapes" for Cityscapes',
+    )
+    parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument(
-        '--show', action='store_true', help='show prediction results')
+        '--show-dir', help='directory where painted images will be saved')
     parser.add_argument(
-        '--show-dir',
-        help='directory where painted images will be saved. '
-        'If specified, it will be automatically saved '
-        'to the work_dir/timestamp/show_dir')
+        '--gpu-collect',
+        action='store_true',
+        help='whether to use gpu to collect results.',
+    )
     parser.add_argument(
-        '--wait-time', type=float, default=2, help='the interval of show (s)')
+        '--tmpdir',
+        help='tmp directory used for collecting results from multiple '
+        'workers, available when gpu_collect is not specified',
+    )
     parser.add_argument(
-        '--cfg-options',
+        '--options', nargs='+', action=DictAction, help='custom options')
+    parser.add_argument(
+        '--eval-options',
         nargs='+',
         action=DictAction,
-        help='override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file. If the value to '
-        'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
-        'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
-        'Note that the quotation marks are necessary and that no white space '
-        'is allowed.')
+        help='custom options for evaluation',
+    )
     parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch', 'slurm', 'mpi'],
         default='none',
-        help='job launcher')
-    parser.add_argument(
-        '--tta', action='store_true', help='Test time augmentation')
-    # When using PyTorch version >= 2.0.0, the `torch.distributed.launch`
-    # will pass the `--local-rank` parameter to `tools/train.py` instead
-    # of `--local_rank`.
-    parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
+        help='job launcher',
+    )
+    parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
-
     return args
-
-
-def trigger_visualization_hook(cfg, args):
-    default_hooks = cfg.default_hooks
-    if 'visualization' in default_hooks:
-        visualization_hook = default_hooks['visualization']
-        # Turn on visualization
-        visualization_hook['draw'] = True
-        if args.show:
-            visualization_hook['show'] = True
-            visualization_hook['wait_time'] = args.wait_time
-        if args.show_dir:
-            visualizer = cfg.visualizer
-            visualizer['save_dir'] = args.show_dir
-    else:
-        raise RuntimeError(
-            'VisualizationHook must be included in default_hooks.'
-            'refer to usage '
-            '"visualization=dict(type=\'VisualizationHook\')"')
-
-    return cfg
 
 
 def main():
     args = parse_args()
 
-    # load config
-    cfg = Config.fromfile(args.config)
-    cfg.launcher = args.launcher
-    if args.cfg_options is not None:
-        cfg.merge_from_dict(args.cfg_options)
+    assert args.out or args.eval or args.format_only or args.show or args.show_dir, (
+        'Please specify at least one operation (save/eval/format/show the '
+        'results / save the results) with the argument "--out", "--eval"'
+        ', "--format-only", "--show" or "--show-dir"')
 
-    # work_dir is determined in this priority: CLI > segment in file > filename
-    if args.work_dir is not None:
-        # update configs according to CLI args if args.work_dir is not None
-        cfg.work_dir = args.work_dir
-    elif cfg.get('work_dir', None) is None:
-        # use config filename as default work_dir if cfg.work_dir is None
-        cfg.work_dir = osp.join('./work_dirs',
-                                osp.splitext(osp.basename(args.config))[0])
+    if 'None' in args.eval:
+        args.eval = None
+    if args.format_only:
+        args.eval = False
+    if args.eval and args.format_only:
+        raise ValueError('--eval and --format_only cannot be both specified')
 
-    cfg.load_from = args.checkpoint
+    if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
+        raise ValueError('The output file must be a pkl file.')
 
-    if args.show or args.show_dir:
-        cfg = trigger_visualization_hook(cfg, args)
+    cfg = mmcv.Config.fromfile(args.config)
+    if args.options is not None:
+        cfg.merge_from_dict(args.options)
+    # set cudnn_benchmark
+    if cfg.get('cudnn_benchmark', False):
+        torch.backends.cudnn.benchmark = True
+    if args.aug_test:
+        if cfg.data.test.type == 'CityscapesDataset':
+            # hard code index
+            cfg.data.test.pipeline[1].img_ratios = [
+                0.5,
+                0.75,
+                1.0,
+                1.25,
+                1.5,
+                1.75,
+                2.0,
+            ]
+            cfg.data.test.pipeline[1].flip = True
+        elif cfg.data.test.type == 'ADE20KDataset':
+            # hard code index
+            cfg.data.test.pipeline[1].img_ratios = [
+                0.75, 0.875, 1.0, 1.125, 1.25
+            ]
+            cfg.data.test.pipeline[1].flip = True
+        else:
+            # hard code index
+            cfg.data.test.pipeline[1].img_ratios = [
+                0.5, 0.75, 1.0, 1.25, 1.5, 1.75
+            ]
+            cfg.data.test.pipeline[1].flip = True
 
-    if args.tta:
-        cfg.test_dataloader.dataset.pipeline = cfg.tta_pipeline
-        cfg.tta_model.module = cfg.model
-        cfg.model = cfg.tta_model
+    cfg.model.pretrained = None
+    cfg.data.test.test_mode = True
 
-    # add output_dir in metric
-    if args.out is not None:
-        cfg.test_evaluator['output_dir'] = args.out
-        cfg.test_evaluator['keep_results'] = True
+    # init distributed env first, since logger depends on the dist info.
+    if args.launcher == 'none':
+        distributed = False
+    else:
+        distributed = True
+        init_dist(args.launcher, **cfg.dist_params)
 
-    # build the runner from config
-    runner = Runner.from_cfg(cfg)
+    # build the dataloader
+    # TODO: support multiple images per gpu (only minor changes are needed)
 
-    # start testing
-    runner.test()
+    dataset = build_dataset(cfg.data.test)
+    data_loader = build_dataloader(
+        dataset,
+        samples_per_gpu=1,
+        workers_per_gpu=cfg.data.workers_per_gpu,
+        dist=distributed,
+        shuffle=False,
+    )
+
+    vis_output = False
+    if vis_output:
+        for i, data in enumerate(data_loader):
+            print(i)
+        exit()
+
+    # build the model and load checkpoint
+    cfg.model.train_cfg = None
+    model = build_segmentor(cfg.model, test_cfg=cfg.get('test_cfg'))
+    # checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
+    # # model.CLASSES = checkpoint['meta']['CLASSES']
+    model.CLASSES = data_loader.dataset.CLASSES
+    model.PALETTE = data_loader.dataset.PALETTE
+    # model.PALETTE = checkpoint['meta']['PALETTE']
+
+    if args.show_dir is not None:
+        from pathlib import Path
+
+        Path(args.show_dir).mkdir(parents=True, exist_ok=True)
+
+    efficient_test = True  # False
+    if args.eval_options is not None:
+        efficient_test = args.eval_options.get('efficient_test', False)
+
+    # if not distributed:
+    #     model = MMDataParallel(model, device_ids=[0])
+    #     outputs, mtC = single_gpu_test(
+    #         model, data_loader, args.show, args.show_dir, efficient_test
+    #     )
+    # else:
+    if distributed:
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+        )
+        outputs, mtC = multi_gpu_test(model, data_loader, args.tmpdir,
+                                      args.gpu_collect, efficient_test)
+    else:
+        print('not distributed. Implementation missing!')
+    stutt = False
+    rank, _ = get_dist_info()
+    if rank == 0:
+        if stutt:
+            print('mTC results is ', mtC)
+        if args.out and not stutt:
+            print(f'\nwriting results to {args.out}')
+            mmcv.dump(outputs, args.out)
+        kwargs = {} if args.eval_options is None else args.eval_options
+        if args.format_only and not stutt:
+            dataset.format_results(outputs, **kwargs)
+        if args.eval and not stutt:
+            dataset.evaluate(outputs, args.eval, **kwargs)
 
 
 if __name__ == '__main__':
