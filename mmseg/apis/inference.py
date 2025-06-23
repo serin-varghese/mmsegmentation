@@ -1,4 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import datetime
+import os
 import warnings
 from pathlib import Path
 from typing import Optional, Union
@@ -19,10 +21,12 @@ from mmseg.visualization import SegLocalVisualizer
 from .utils import ImageType, _preprare_data
 
 
-def init_model(config: Union[str, Path, Config],
-               checkpoint: Optional[str] = None,
-               device: str = 'cuda:0',
-               cfg_options: Optional[dict] = None):
+def init_model(
+    config: Union[str, Path, Config],
+    checkpoint: Optional[str] = None,
+    device: str = 'cuda:0',
+    cfg_options: Optional[dict] = None,
+):
     """Initialize a segmentor from config file.
 
     Args:
@@ -40,8 +44,9 @@ def init_model(config: Union[str, Path, Config],
     if isinstance(config, (str, Path)):
         config = Config.fromfile(config)
     elif not isinstance(config, Config):
-        raise TypeError('config must be a filename or Config object, '
-                        'but got {}'.format(type(config)))
+        raise TypeError(
+            'config must be a filename or Config object, but got {}'.format(
+                type(config)))
     if cfg_options is not None:
         config.merge_from_dict(cfg_options)
     if config.model.type == 'EncoderDecoder':
@@ -70,10 +75,9 @@ def init_model(config: Union[str, Path, Config],
             model.dataset_meta = {'classes': classes, 'palette': palette}
         else:
             warnings.simplefilter('once')
-            warnings.warn(
-                'dataset_meta or class names are not saved in the '
-                'checkpoint\'s meta data, classes and palette will be'
-                'set according to num_classes ')
+            warnings.warn('dataset_meta or class names are not saved in the '
+                          "checkpoint's meta data, classes and palette will be"
+                          'set according to num_classes ')
             num_classes = model.decode_head.num_classes
             dataset_name = None
             for name in dataset_aliases.keys():
@@ -86,7 +90,7 @@ def init_model(config: Union[str, Path, Config],
                 dataset_name = 'cityscapes'
             model.dataset_meta = {
                 'classes': get_classes(dataset_name),
-                'palette': get_palette(dataset_name)
+                'palette': get_palette(dataset_name),
             }
     model.cfg = config  # save the config in the model for convenience
     model.to(device)
@@ -94,14 +98,19 @@ def init_model(config: Union[str, Path, Config],
     return model
 
 
-def inference_model(model: BaseSegmentor,
-                    img: ImageType) -> Union[SegDataSample, SampleList]:
+def inference_model(
+        model: BaseSegmentor,
+        img: ImageType,
+        output_dir: Optional[str] = None) -> Union[SegDataSample, SampleList]:
     """Inference image(s) with the segmentor.
 
     Args:
         model (nn.Module): The loaded segmentor.
         imgs (str/ndarray or list[str/ndarray]): Either image files or loaded
             images.
+        output_dir (str, optional): The directory to save the segmentation
+            results. If not specified, the results will be saved with the current
+            timestamp in the current directory. Default: None.
 
     Returns:
         :obj:`SegDataSample` or list[:obj:`SegDataSample`]:
@@ -115,21 +124,39 @@ def inference_model(model: BaseSegmentor,
     with torch.no_grad():
         results = model.test_step(data)
 
+    if output_dir is None:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        output_dir = f'SegMask-{timestamp}'
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+    if is_batch:
+        for i, result in enumerate(results):
+            filename = f'{os.path.basename(img[i])[:-4]}_LABEL.npy'
+            path = f'{output_dir}/{filename}'
+            torch.save(result.pred_sem_seg.data, path)
+    else:
+        filename = f'{os.path.basename(img)[:-4]}_LABEL.npy'
+        path = f'{output_dir}/{filename}'
+        np.save(path, results[0].pred_sem_seg.data.numpy())
+
     return results if is_batch else results[0]
 
 
-def show_result_pyplot(model: BaseSegmentor,
-                       img: Union[str, np.ndarray],
-                       result: SegDataSample,
-                       opacity: float = 0.5,
-                       title: str = '',
-                       draw_gt: bool = True,
-                       draw_pred: bool = True,
-                       wait_time: float = 0,
-                       show: bool = True,
-                       with_labels: Optional[bool] = True,
-                       save_dir=None,
-                       out_file=None):
+def show_result_pyplot(
+    model: BaseSegmentor,
+    img: Union[str, np.ndarray],
+    result: SegDataSample,
+    opacity: float = 0.5,
+    title: str = '',
+    draw_gt: bool = True,
+    draw_pred: bool = True,
+    wait_time: float = 0,
+    show: bool = True,
+    with_labels: Optional[bool] = True,
+    save_dir=None,
+    out_file=None,
+):
     """Visualize the segmentation results on the image.
 
     Args:
@@ -183,7 +210,8 @@ def show_result_pyplot(model: BaseSegmentor,
         wait_time=wait_time,
         out_file=out_file,
         show=show,
-        with_labels=with_labels)
+        with_labels=with_labels,
+    )
     vis_img = visualizer.get_image()
 
     return vis_img

@@ -118,3 +118,11 @@ mmseg/.mim
 
 # Pytorch
 *.pth
+README.md
+
+# Ruff cache
+.ruff_cache/
+
+*.pth
+
+data/*.png
