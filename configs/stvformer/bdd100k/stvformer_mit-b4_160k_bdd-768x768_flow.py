@@ -1,8 +1,25 @@
 _base_ = [
-    '../../_base_/models/segformer.py',
-    '../../_base_/default_runtime.py',
-    '../../_base_/schedules/schedule_160k_adamw.py'
+    '../_base_/models/segformer_mit-b0.py',
+    '../_base_/datasets/bdd100k.py',
+    '../_base_/default_runtime.py',
+    '../_base_/schedules/schedule_160k.py',
 ]
+
+crop_size = (768, 768)
+data_preprocessor = dict(size=crop_size)
+
+checkpoint = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segformer/mit_b4_20220624-d588d980.pth'  # noqa
+
+model = dict(
+    data_preprocessor=data_preprocessor,
+    backbone=dict(
+        init_cfg=dict(type='Pretrained', checkpoint=checkpoint),
+        embed_dims=64,
+        num_layers=[3, 6, 40, 3],
+    ),
+    test_cfg=dict(mode='slide', crop_size=(768, 768), stride=(768, 768)),
+    decode_head=dict(in_channels=[64, 128, 320, 512]),
+)
 
 # model settings
 norm_cfg = dict(type='SyncBN', requires_grad=True)
@@ -10,9 +27,7 @@ find_unused_parameters = True
 model = dict(
     type='EncoderDecoder',
     pretrained='pretrained/mit_b4.pth',
-    backbone=dict(
-        type='mit_b4',
-        style='pytorch'),
+    backbone=dict(type='mit_b4', style='pytorch'),
     decode_head=dict(
         type='SegFormerHead',
         in_channels=[64, 128, 320, 512],
@@ -24,12 +39,14 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         decoder_params=dict(embed_dim=768),
-        loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+        loss_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+    ),
     # model training and testing settings
     train_cfg=dict(),
     # test_cfg=dict(mode='whole'))
-    test_cfg=dict(mode='slide', crop_size=(768,768), stride=(768,768)))
-
+    test_cfg=dict(mode='slide', crop_size=(768, 768), stride=(768, 768)),
+)
 
 # dataset settings
 dataset_type = 'CityscapesDataset'
@@ -64,7 +81,8 @@ test_pipeline = [
             dict(type='Normalize', **img_norm_cfg),
             dict(type='ImageToTensor', keys=['img', 'seq', 'seq_flo']),
             dict(type='Collect', keys=['img', 'seq', 'seq_flo']),
-        ])
+        ],
+    ),
 ]
 data = dict(
     samples_per_gpu=1,
@@ -77,37 +95,49 @@ data = dict(
             data_root=data_root,
             img_dir='leftImg8bit/train',
             ann_dir='gtFine/train',
-            pipeline=train_pipeline)),
+            pipeline=train_pipeline,
+        ),
+    ),
     val=dict(
         type=dataset_type,
         data_root=data_root,
         img_dir='leftImg8bit/val',
         ann_dir='gtFine/val',
-        pipeline=test_pipeline),
+        pipeline=test_pipeline,
+    ),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         img_dir='leftImg8bit/val',
         ann_dir='gtFine/val',
-        pipeline=test_pipeline))
+        pipeline=test_pipeline,
+    ),
+)
 
 evaluation = dict(interval=4000, metric='mIoU')
 
 # optimizer
-optimizer = dict(_delete_=True, type='AdamW', lr=0.00006, betas=(0.9, 0.999), weight_decay=0.01,
-                 paramwise_cfg=dict(custom_keys={'pos_block': dict(decay_mult=0.),
-                                                 'norm': dict(decay_mult=0.),
-                                                 'head': dict(lr_mult=10.)
-                                                 }))
+optimizer = dict(
+    _delete_=True,
+    type='AdamW',
+    lr=0.00006,
+    betas=(0.9, 0.999),
+    weight_decay=0.01,
+    paramwise_cfg=dict(
+        custom_keys={
+            'pos_block': dict(decay_mult=0.0),
+            'norm': dict(decay_mult=0.0),
+            'head': dict(lr_mult=10.0),
+        }),
+)
 
-lr_config = dict(_delete_=True, policy='poly',
-                 warmup='linear',
-                 warmup_iters=1500,
-                 warmup_ratio=1e-6,
-                 power=1.0, min_lr=0.0, by_epoch=False)
-
-
-
-
-
-
+lr_config = dict(
+    _delete_=True,
+    policy='poly',
+    warmup='linear',
+    warmup_iters=1500,
+    warmup_ratio=1e-6,
+    power=1.0,
+    min_lr=0.0,
+    by_epoch=False,
+)
